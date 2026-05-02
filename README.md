@@ -51,7 +51,7 @@ of the box.
 > **Tested on:** Orange Pi PC (Allwinner H3)
 
 This project was developed and tested on the **Orange Pi PC**, and a ready-to-use
-Alpine base image is provided for it. However, the scripts are **board-agnostic**
+Alpine  image is provided for it. However, the scripts are **board-agnostic**
 by design:
 
 - `extract-armbian.sh` works with any Armbian `.img.xz` image regardless of board
@@ -119,7 +119,7 @@ and then use `install.sh` to apply the Armbian kernel.
 
 **Linux:**
 ```sh
-gunzip -c alpine-orangepi-base.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+gunzip -c <base image> | sudo dd of=/dev/sdX bs=4M status=progress
 sync
 ```
 
@@ -244,7 +244,7 @@ Example output:
 
 ```sh
 # Flash the base image
-gunzip -c alpine-orangepi-base.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+gunzip -c <base image> | sudo dd of=/dev/sdX bs=4M status=progress
 sync
 
 # Expand root partition (if SD card > 2GB)
