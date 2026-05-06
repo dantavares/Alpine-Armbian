@@ -15,29 +15,66 @@ if [[ "$ARMBIAN_IMAGE" == *.xz ]]; then
     ARMBIAN_IMAGE="${ARMBIAN_IMAGE%.xz}"
 fi
 
+# Verificar SHA256 se arquivo .sha estiver disponível
+SHA_FILE="${ARMBIAN_IMAGE}.sha"
+if [ -f "$SHA_FILE" ]; then
+    echo "==> Verifying SHA256..."
+    EXPECTED=$(awk '{print $1}' "$SHA_FILE")
+    ACTUAL=$(sha256sum "$ARMBIAN_IMAGE" | awk '{print $1}')
+    if [ "$EXPECTED" = "$ACTUAL" ]; then
+        echo "    SHA256 OK: $ACTUAL"
+    else
+        echo "    ERROR: SHA256 mismatch!"
+        echo "    Expected: $EXPECTED"
+        echo "    Actual:   $ACTUAL"
+        echo "    The image may be corrupted. Please download it again."
+        rm -f "$ARMBIAN_IMAGE"
+        exit 1
+    fi
+else
+    echo "==> No .sha file found, skipping checksum verification."
+    echo "    To verify, place ${ARMBIAN_IMAGE}.sha in the same folder."
+fi
+
 echo "==> Setting up loop device..."
-LOOP=$(sudo losetup -f --show -P "$ARMBIAN_IMAGE")
+LOOP=$(sudo losetup -f --show "$ARMBIAN_IMAGE")
 echo "    Loop device: $LOOP"
+
+# Forçar detecção de partições
+sudo partprobe "$LOOP"
+sleep 1
 
 # Listar partições encontradas
 echo "==> Partitions found:"
-ls ${LOOP}p*
+ls ${LOOP}p* 2>/dev/null || ls ${LOOP}* | grep -v "^${LOOP}$"
 
 # Criar pontos de montagem temporários
 MOUNT_BOOT=$(mktemp -d)
 MOUNT_ROOT=$(mktemp -d)
 
 echo "==> Mounting partitions..."
-sudo mount ${LOOP}p1 "$MOUNT_BOOT"
-sudo mount ${LOOP}p2 "$MOUNT_ROOT" 2>/dev/null || sudo mount ${LOOP}p1 "$MOUNT_ROOT"
-
-# Detectar estrutura — single partition ou dual partition
-if [ -d "$MOUNT_ROOT/lib/modules" ]; then
+# Detectar se é single partition ou dual partition
+if [ -b "${LOOP}p2" ]; then
+    echo "    Dual partition image detected"
+    sudo mount ${LOOP}p1 "$MOUNT_BOOT"
+    sudo mount ${LOOP}p2 "$MOUNT_ROOT"
+    # Detectar onde está o root
+    if [ -d "$MOUNT_ROOT/lib/modules" ]; then
+        ROOT="$MOUNT_ROOT"
+        BOOT="$MOUNT_ROOT/boot"
+    else
+        ROOT="$MOUNT_ROOT"
+        BOOT="$MOUNT_BOOT"
+    fi
+elif [ -b "${LOOP}p1" ]; then
+    echo "    Single partition image detected"
+    sudo mount ${LOOP}p1 "$MOUNT_ROOT"
     ROOT="$MOUNT_ROOT"
     BOOT="$MOUNT_ROOT/boot"
 else
-    ROOT="$MOUNT_ROOT"
-    BOOT="$MOUNT_BOOT"
+    echo "    ERROR: No partitions found on loop device"
+    sudo losetup -d "$LOOP"
+    exit 1
 fi
 
 echo "==> Boot path: $BOOT"
